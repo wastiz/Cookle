@@ -211,41 +211,92 @@ window.addEventListener('DOMContentLoaded', function() {
 
     const forms = document.querySelectorAll('form');
     const message = {
-        loading: 'Loading',
-        success: 'Success',
-        failure: 'Failure',
+        loading: 'img/form/spinner.svg',
+        success: 'Спасибо! Скоро мы с вами свяжемся',
+        failure: 'Что-то пошло не так...'
     };
 
     forms.forEach(item => {
-        postData(item);
+        bindPostData(item);
     });
 
-    function postData(form) {
-        form.addEventListener('submit', function(e){
+    const postData = async (url, data) => { // этот код мы сделали асихронным
+        let res = await fetch(url, { //А тут наоборот сихронным, чтобы код дождался какого-нибудь результата от сервера
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: data
+        });
+    
+        return await res.json();
+    };
+
+    async function getResource(url) {
+        let res = await fetch(url);
+    
+        if (!res.ok) {
+            throw new Error(`Could not fetch ${url}, status: ${res.status}`);
+        }
+    
+        return await res.json();
+    }
+
+    function bindPostData(form) {
+        form.addEventListener('submit', (e) => {
             e.preventDefault();
-            const statusMessage = document.createElement('div');
-            statusMessage.classList.add('status');
-            statusMessage.textContent = message.loading;
-            form.append(statusMessage);
-            const request =  new XMLHttpRequest();
-            request.open('POST', 'server.php');
-            //request.setRequestHeader('Content-Type', 'multipart/form-data');
-            //Когда мы используем связку XMLHttpRequest + formData, тогда заголовок не надо делать, ведь он создается автоматически
-            const formData = new FormData(form); //Более упрощенный вариант для отправки данных с форм.
-            //в верстке в динамических элементов, с которых мы хотим отпраить данные ставим атрибут name
-            request.send(formData);
-            request.addEventListener('load', function(){
-                if(request.status === 200) {
-                    console.log(request.response);
-                    statusMessage.textContent = message.success;
-                    form.reset();
-                    setTimeout(function(){
-                        statusMessage.remove();
-                    }, 2000);
-                } else {
-                    statusMessage.textContent = message.failure;
-                }
+
+            let statusMessage = document.createElement('img');
+            statusMessage.src = message.loading;
+            statusMessage.style.cssText = `
+                display: block;
+                margin: 0 auto;
+            `;
+            form.insertAdjacentElement('afterend', statusMessage);
+        
+            const formData = new FormData(form);
+
+            const json = JSON.stringify(Object.fromEntries(formData.entries()));
+
+            postData('http://localhost:3000/requests', json)
+            .then(data => {
+                console.log(data);
+                showThanksModal(message.success);
+                statusMessage.remove();
+            }).catch(() => {
+                showThanksModal(message.failure);
+            }).finally(() => {
+                form.reset();
             });
         });
     }
+
+    function showThanksModal(message) {
+        const prevModalDialog = document.querySelector('.modal__dialog');
+
+        prevModalDialog.classList.add('hide');
+        openModal();
+
+        const thanksModal = document.createElement('div');
+        thanksModal.classList.add('modal__dialog');
+        thanksModal.innerHTML = `
+            <div class="modal__content">
+                <div class="modal__close" data-close>×</div>
+                <div class="modal__title">${message}</div>
+            </div>
+        `;
+        document.querySelector('.modal').append(thanksModal);
+        setTimeout(() => {
+            thanksModal.remove();
+            prevModalDialog.classList.add('show');
+            prevModalDialog.classList.remove('hide');
+            closeModal();
+        }, 4000);
+    }
+
+    fetch('http://localhost:3000/menu')
+        .then(data => data.json())
+        .then(res => console.log(res));
+
+
 });
